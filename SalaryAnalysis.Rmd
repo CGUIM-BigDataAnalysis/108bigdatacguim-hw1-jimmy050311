@@ -10,24 +10,86 @@ author: put your name here
 
 ### 資料匯入與處理
 ```{r dataload}
-library(readr)
+library(jsonlite)
+library(purrr)
 library(dplyr)
+library(knitr)
+salary107 <- fromJSON("/Users/laichunming/Desktop/Salary107_json/107年各教育程度別初任人員每人每月經常性薪資─按大職類分.json")
+salary104 <- fromJSON("/Users/laichunming/Desktop/Salary104.json")
+
+salary104$大職業別 <- gsub("、","_",salary104$大職業別)
+salary104$大職業別 <- gsub("部門","",salary104$大職業別)
+salary107$大職業別 <- gsub("出版、影音製作、傳播及資通訊服務業","資訊及通訊傳播業",
+                       salary107$大職業別)
+salary107$大職業別 <- gsub("工程","業",salary107$大職業別)
+salary107$大職業別 <- gsub("建","造",salary107$大職業別)
+salary104$大職業別 <- gsub("教育服務業","教育業",salary104$大職業別)
+salary104$大職業別 <- gsub("醫療保健服務業","醫療保健業",salary104$大職業別)
+compare <- cbind(salary104$大職業別,salary107$大職業別)
+
+salary104$`經常性薪資-薪資` <- gsub("—|…","",salary104$`經常性薪資-薪資`)
+salary104$`經常性薪資-女/男` <- gsub("—|…","",salary104$`經常性薪資-女/男`)
+salary104$`國中及以下-薪資` <- gsub("—|…","",salary104$`國中及以下-薪資`)
+salary104$`國中及以下-女/男` <- gsub("—|…","",salary104$`國中及以下-女/男`)
+salary104$`高中或高職-薪資` <- gsub("—|…","",salary104$`國中及以下-女/男`)
+salary104$`高中或高職-女/男` <- gsub("—|…","",salary104$`國中及以下-女/男`)
+salary104$`專科-薪資` <- gsub("—|…","",salary104$`國中及以下-女/男`)
+salary104$`專科-女/男` <- gsub("—|…","",salary104$`國中及以下-女/男`)
+salary104$`大學-薪資` <- gsub("—|…","",salary104$`大學-薪資`)
+salary104$`大學-女/男`<- gsub("—|…","",salary104$`大學-女/男`)
+salary104$`研究所及以上-薪資` <- gsub("—|…","",salary104$`研究所及以上-薪資`)
+salary104$`研究所及以上-女/男`<- gsub("—|…","",salary104$`研究所及以上-女/男`)
+
+names(salary107)[13] <- '研究所及以上-薪資'
+names(salary107)[14] <- '研究所及以上-女/男'
+
+salary107$`經常性薪資-薪資` <- gsub("—|…","",salary107$`經常性薪資-薪資`)
+salary107$`經常性薪資-女/男` <- gsub("—|…","",salary107$`經常性薪資-女/男`)
+salary107$`國中及以下-薪資` <- gsub("—|…","",salary107$`國中及以下-薪資`)
+salary107$`國中及以下-女/男` <- gsub("—|…","",salary107$`國中及以下-女/男`)
+salary107$`高中或高職-薪資` <- gsub("—|…","",salary107$`國中及以下-女/男`)
+salary107$`高中或高職-女/男` <- gsub("—|…","",salary107$`國中及以下-女/男`)
+salary107$`專科-薪資` <- gsub("—|…","",salary107$`國中及以下-女/男`)
+salary107$`專科-女/男` <- gsub("—|…","",salary107$`國中及以下-女/男`)
+salary107$`大學-薪資` <- gsub("—|…","",salary107$`大學-薪資`)
+salary107$`大學-女/男`<- gsub("—|…","",salary107$`大學-女/男`)
+salary107$`研究所及以上-薪資` <- gsub("—|…","",salary107$`研究所及以上-薪資`)
+salary107$`研究所及以上-女/男`<- gsub("—|…","",salary107$`研究所及以上-女/男`)
+
+salary104 <- salary104[,c(1,2,11,12,13,14)]
+salary107 <- salary107[,c(1,2,11,12,13,14)]
+joinData <- inner_join(salary104,salary107,by="大職業別")
+
+joinData$`大學-薪資.x` <- as.numeric(joinData$`大學-薪資.x`)
+joinData$`大學-薪資.y` <- as.numeric(joinData$`大學-薪資.y`)
+joinData <- mutate(joinData,大學薪資比=`大學-薪資.y` / `大學-薪資.x`)
 
 ```
 
 ### 107年度薪資較104年度薪資高的職業有哪些? 
 ```{r compare103106}
-#這是R Code Chunk
+
+joinDataOrder <- joinData[order(joinData$大學薪資比,decreasing = T),]
+kable(head(joinDataOrder,10))
+
 ```
+
+教育業以及行銷相關、技術相關職業在104到107年的薪資有顯著的提升。
 
 ### 提高超過5%的的職業有哪些? 
 ```{r over5}
-#這是R Code Chunk
+
+DataAws <- filter(joinDataOrder,大學薪資比>1.05)
+kable(DataAws)
 ```
 
 ### 主要的職業種別是哪些種類呢?
 ```{r mainType}
-#這是R Code Chunk
+
+DataAws$splitData <- strsplit(DataAws$大職業別,"-")
+DataAws$splitData <- lapply(DataAws$splitData, "[", 1)
+DataAws$splitData<-unlist(DataAws$splitData)
+kable(table(DataAws$splitData))
 ```
 
 ## 男女同工不同酬現況分析
@@ -36,30 +98,60 @@ library(dplyr)
 
 ### 104和107年度的大學畢業薪資資料，哪些行業男生薪資比女生薪資多?
 ```{r male}
-#這是R Code Chunk
+#104年
+salary104$`大學-女/男` <- as.numeric(salary104$`大學-女/男`)
+menSalary104 <- filter(salary104,`大學-女/男`<100)
+kable(head(menSalary104[order(menSalary104$`大學-女/男`,decreasing = F),],10))
+#107年
+salary107$`大學-女/男` <- as.numeric(salary107$`大學-女/男`)
+menSalary107 <- filter(salary107,`大學-女/男`<100)
+kable(head(menSalary107[order(menSalary107$`大學-女/男`,decreasing = F),],10))
 ```
+
+大部分的行業大學畢業後都是男生的薪資高於女生，其中以營造業，礦業和技術操作人員的差異最多。
+
 ### 哪些行業女生薪資比男生薪資多? 
 ```{r female}
-#這是R Code Chunk
+#104年
+womenSalaryH104 <- filter(salary104,`大學-女/男`>=100)
+kable(womenSalaryH104[order(womenSalaryH104$`大學-女/男`,decreasing = T),])
+#107年
+womenSalaryH107 <- filter(salary107,`大學-女/男`>=100)
+kable(womenSalaryH107[order(womenSalaryH107$`大學-女/男`,decreasing = T),])
 ```
+
+在104年只有專業_科學及技術服務業-技藝_機械設備操作及組裝人員這個職業的薪資女生高於男生，其他的薪資都呈現女生和男生相同薪水的情況。
 
 ## 研究所薪資差異
 
 以107年度的資料來看，哪個職業別念研究所最划算呢 (研究所學歷薪資與大學學歷薪資增加比例最多)?
  
 ```{r grad}
-#這是R Code Chunk
+salary107$`研究所及以上-薪資` <- as.numeric(salary107$`研究所及以上-薪資`)
+salary107$`大學-薪資` <- as.numeric(salary107$`大學-薪資`)
+salary107$Study <- salary107$`研究所及以上-薪資`/salary107$`大學-薪資`
+kable(head(salary107[order(salary107$Study,decreasing = T),],10))
 ```
+
+其他服務業，科學技術，資訊通訊等行業薪資增加最多，其中科學技術和其他服務業的成長幅度最多，超過1.2。
 
 ## 我有興趣的職業別薪資狀況分析
 
 ### 有興趣的職業別篩選，呈現薪資
 ```{r like}
-#這是R Code Chunk
+job <- salary107[grepl("資訊",salary107$大職業別),]
+job <- job[1:4,]
+kable(job)
 ```
+
+不太一樣，以我在求職網上資訊相關產業大學畢業的起薪應該是3萬元以上
 
 ### 這些職業別研究所薪資與大學薪資差多少呢？
 ```{r likeGrad}
-#這是R Code Chunk
+job$jobDifferent <- job$`研究所及以上-薪資` - job$`大學-薪資`
+kable(job)
 ```
+
+研究所和大學的薪資差異大約是差3500到5000元，
+我不會改變心意我還是想直接就業
 
